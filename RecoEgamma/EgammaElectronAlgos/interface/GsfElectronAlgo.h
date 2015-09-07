@@ -43,6 +43,12 @@ class EcalClusterFunctionBaseClass ;
 #include "RecoLocalCalo/EcalRecAlgos/interface/EcalSeverityLevelAlgo.h"
 #include "RecoLocalCalo/EcalRecAlgos/interface/EcalSeverityLevelAlgoRcd.h"
 
+//CC@@
+// lines below sre only needed temporarily waiting
+//  for the axis to be stored in the CaloCluster
+#include "DataFormats/ParticleFlowReco/interface/PFCluster.h"
+#include "DataFormats/ParticleFlowReco/interface/PFClusterFwd.h"
+
 #include <list>
 #include <string>
 
@@ -232,6 +238,7 @@ class GsfElectronAlgo {
 
     // associations
     const reco::SuperClusterRef getTrSuperCluster( const reco::GsfTrackRef & trackRef ) ;
+    
  } ;
 
 #endif // GsfElectronAlgo_H
