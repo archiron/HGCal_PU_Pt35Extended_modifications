@@ -1,0 +1,120 @@
+globaltag = PH2_1K_FB_V4::All
+RAW2DIGI only for EB FEDs
+29-Jun-2015 16:03:18 CEST  Initiating request to open file file:ElectronsPt35-2023HGCALUpg_SLHC25_step1.root
+29-Jun-2015 16:03:19 CEST  Successfully opened file file:ElectronsPt35-2023HGCALUpg_SLHC25_step1.root
+%MSG-e HCAL:  ZdcHitReconstructor:zdcreco@beginRun 29-Jun-2015 16:03:31 CEST  Run: 1
+Inconsistent dense packing between current topology (10) and calibration object (0)
+%MSG
+in MuonNumberingInitialization::initializeMuonDDDConstants
+about to make my new muonDDDConst_
+in MuonNumberingInitialization::produce
+0x7f416087a200 is tTopo
+RPCGeometryESModule :: produce
+RPCGeometryESModule :: produce :: 1/4 Get Muon Ideal Geometry Record
+RPCGeometryESModule :: produce :: 2/4 Get Muon DDD Constants
+RPCGeometryESModule :: produce :: 3/4 Get Muon Numbering Record
+RPCGeometryESModule :: produce :: 4/4 Build
+Building the geometry service
+%MSG-e WrongGeometry:   ReducedESRecHitCollectionProducer:reducedEcalRecHitsES@beginRun  29-Jun-2015 16:03:45 CEST Run: 1
+could not cast the subdet geometry to preshower geometry
+%MSG
+HGCalGeometryBuilder-> 1080 cells are produced
+HGCalGeometryBuilder-> 432 cells are produced
+HGCalGeometryBuilder-> 864 cells are produced
+Begin processing the 1st record. Run 1, Event 57, LumiSection 2 at 29-Jun-2015 16:03:45.642 CEST
+%MSG-w SiStripQuality:  SiStripZeroSuppression:siStripZeroSuppression  29-Jun-2015 16:03:46 CEST Run: 1 Event: 57
+The cabling should always include the active feds in runInfo and possibly have some morethere are instead 59 feds only active in runInfo
+%MSG
+%MSG-w HcalSimpleReconstructor:  HcalSimpleReconstructor:hbheUpgradeReco  29-Jun-2015 16:03:55 CEST Run: 1 Event: 57
+Fit errors produced:
+	5583 successful fits.
+	Error 1 occurred 101 times.
+	Error 2 occurred 997 times.
+	Error 3 occurred 3967 times.
+	Error 4 occurred 687 times.
+
+%MSG
+MSLayersKeeperX0DetLayer LAYERS: 
+%MSG-w InvalidHelix:  SeedGeneratorFromRegionHitsEDProducer:pixelPairStepSeeds  29-Jun-2015 16:05:09 CEST Run: 1 Event: 57
+PixelClusterShapeSeedComparitor helix is not valid, result is bad
+%MSG
+%MSG-w InvalidHelix:  SeedGeneratorFromRegionHitsEDProducer:pixelPairStepSeeds  29-Jun-2015 16:05:10 CEST Run: 1 Event: 57
+PixelClusterShapeSeedComparitor helix is not valid, result is bad
+%MSG
+%MSG-w InvalidHelix:  SeedGeneratorFromRegionHitsEDProducer:pixelPairStepSeeds  29-Jun-2015 16:05:10 CEST Run: 1 Event: 57
+PixelClusterShapeSeedComparitor helix is not valid, result is bad
+%MSG
+%MSG-w InvalidHelix:  SeedGeneratorFromRegionHitsEDProducer:pixelPairStepSeeds  29-Jun-2015 16:05:10 CEST Run: 1 Event: 57
+PixelClusterShapeSeedComparitor helix is not valid, result is bad
+%MSG
+%MSG-w InvalidHelix:  SeedGeneratorFromRegionHitsEDProducer:pixelPairStepSeeds  29-Jun-2015 16:05:10 CEST Run: 1 Event: 57
+PixelClusterShapeSeedComparitor helix is not valid, result is bad
+%MSG
+%MSG-w InvalidHelix:  SeedGeneratorFromRegionHitsEDProducer:pixelPairStepSeeds  29-Jun-2015 16:05:10 CEST Run: 1 Event: 57
+PixelClusterShapeSeedComparitor helix is not valid, result is bad
+%MSG
+%MSG-w InvalidHelix:  SeedGeneratorFromRegionHitsEDProducer:pixelPairStepSeeds  29-Jun-2015 16:05:11 CEST Run: 1 Event: 57
+PixelClusterShapeSeedComparitor helix is not valid, result is bad
+%MSG
+%MSG-w InvalidHelix:  SeedGeneratorFromRegionHitsEDProducer:pixelPairStepSeeds  29-Jun-2015 16:05:11 CEST Run: 1 Event: 57
+PixelClusterShapeSeedComparitor helix is not valid, result is bad
+%MSG
+%MSG-w InvalidHelix:  SeedGeneratorFromRegionHitsEDProducer:pixelPairStepSeeds  29-Jun-2015 16:05:11 CEST Run: 1 Event: 57
+PixelClusterShapeSeedComparitor helix is not valid, result is bad
+%MSG
+%MSG-e TooManyClusters:   PhotonConversionTrajectorySeedProducerFromSingleLeg:photonConvTrajSeedFromSingleLeg  29-Jun-2015 16:05:29 CEST Run: 1 Event: 57
+Found too many clusters (292846), bailing out.
+
+%MSG
+%MSG-e ArborInfo:  PFClusterProducer:particleFlowClusterHGCHEF  29-Jun-2015 16:06:32 CEST Run: 1 Event: 57
+Made 638 clusters!
+%MSG
+%MSG-e ArborInfo:  PFClusterProducer:particleFlowClusterHGCHEB  29-Jun-2015 16:06:32 CEST Run: 1 Event: 57
+Made 89 clusters!
+%MSG
+(new) Found 3818 PFBlocks!
+%MSG-w InvalidInputTag:  CSCHaloDataProducer:CSCHaloData  29-Jun-2015 16:06:54 CEST Run: 1 Event: 57
+The HLT results do not appear to be in the event. The beam halo HLT trigger decision will not be used in the halo identification
+%MSG
+%MSG-w InvalidInputTag:  CSCHaloDataProducer:CSCHaloData  29-Jun-2015 16:06:54 CEST Run: 1 Event: 57
+The CSCALCTDigiCollection does not appear to be in the event. The ALCT Digis will  not be used in the halo identification
+%MSG
+29-Jun-2015 16:07:02 CEST  Closed file file:ElectronsPt35-2023HGCALUpg_SLHC25_step1.root
+
+=============================================
+
+MessageLogger Summary
+
+ type     category        sev    module        subroutine        count    total
+ ---- -------------------- -- ---------------- ----------------  -----    -----
+    1 HcalSimpleReconstruc -w HcalSimpleRecons                       1        1
+    2 InvalidHelix         -w SeedGeneratorFro                       9        9
+    3 InvalidInputTag      -w CSCHaloDataProdu                       2        2
+    4 SiStripQuality       -w SiStripZeroSuppr                       1        1
+    5 ArborInfo            -e PFClusterProduce                       1        1
+    6 ArborInfo            -e PFClusterProduce                       1        1
+    7 HCAL                 -e ZdcHitReconstruc                       1        1
+    8 TooManyClusters      -e PhotonConversion                       1        1
+    9 WrongGeometry        -e ReducedESRecHitC                       1        1
+   10 fileAction           -s file_close                             1        1
+   11 fileAction           -s file_open                              2        2
+
+ type    category    Examples: run/evt        run/evt          run/evt
+ ---- -------------------- ---------------- ---------------- ----------------
+    1 HcalSimpleReconstructor 1/57                              
+    2 InvalidHelix         1/57             1/57             1/57
+    3 InvalidInputTag      1/57             1/57             
+    4 SiStripQuality       1/57                              
+    5 ArborInfo            1/57                              
+    6 ArborInfo            1/57                              
+    7 HCAL                 Run: 1                            
+    8 TooManyClusters      1/57                              
+    9 WrongGeometry        Run: 1                            
+   10 fileAction           PostEndRun                        
+   11 fileAction           pre-events       pre-events       
+
+Severity    # Occurrences   Total Occurrences
+--------    -------------   -----------------
+Warning                13                  13
+Error                   5                   5
+System                  3                   3

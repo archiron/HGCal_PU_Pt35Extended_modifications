@@ -1,0 +1,25 @@
+<use   name="RecoEgamma/EgammaElectronAlgos"/>
+<use   name="RecoEgamma/EgammaMCTools"/>
+<use   name="RecoEcal/EgammaCoreTools"/>
+<use   name="CommonTools/UtilAlgos"/>
+<use   name="CondFormats/DataRecord"/>
+<use   name="CondFormats/EgammaObjects"/>
+<use   name="Geometry/CaloGeometry"/>
+<use   name="Geometry/FCalGeometry"/>
+<use   name="DataFormats/ForwardDetId"/>
+<use   name="Geometry/HGCalCommonData"/>
+<use   name="FWCore/Framework"/>
+<use   name="FWCore/ParameterSet"/>
+<use   name="FWCore/ServiceRegistry"/>
+<use   name="DataFormats/Common"/>
+<use   name="DataFormats/ParticleFlowReco"/>
+<use   name="DataFormats/EgammaCandidates"/>
+<use   name="DataFormats/EgammaReco"/>
+<use   name="DataFormats/HcalRecHit"/>
+<use   name="DataFormats/DetId"/>
+<use   name="hepmc"/>
+<use   name="clhep"/>
+<use   name="root"/>
+<export>
+<lib name="1"/>
+</export>

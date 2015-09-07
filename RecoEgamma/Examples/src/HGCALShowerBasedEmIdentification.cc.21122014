@@ -1,0 +1,469 @@
+#include "RecoEgamma/Examples/interface/HGCALShowerBasedEmIdentification.h"
+#include "RecoEgamma/Examples/interface/PCAShowerAnalysis.h"
+#include "Geometry/Records/interface/CaloGeometryRecord.h"
+#include "Geometry/CaloGeometry/interface/CaloSubdetectorGeometry.h"
+
+#include "DataFormats/EgammaReco/interface/BasicCluster.h"
+#include "DataFormats/ParticleFlowReco/interface/PFCluster.h"
+#include "DataFormats/EgammaReco/interface/SuperCluster.h"
+
+#include "Math/Vector3D.h"
+#include "Math/VectorUtil.h"
+#include "TPrincipal.h"
+
+
+HGCALShowerBasedEmIdentification::HGCALShowerBasedEmIdentification (const edm::Event&
+ iEvent, const edm::EventSetup& iSetup, bool withPileup, bool debug): 
+ withPileup_(withPileup), debug_(debug)
+{
+
+  iEvent.getByLabel(edm::InputTag("HGCalRecHit:HGCEERecHits"),recHits_);
+  iEvent.getByLabel(edm::InputTag("particleFlowClusterHGCHEF"),hcalClusters_);
+  
+  edm::ESHandle<HGCalGeometry> pGeometry;
+  unsigned long long newCaloGeomCacheId= iSetup.get<IdealGeometryRecord>().cacheIdentifier() ;
+  if (caloGeomCacheId_!=newCaloGeomCacheId) {
+    caloGeomCacheId_ = newCaloGeomCacheId ;
+    iSetup.get<IdealGeometryRecord>().get("HGCalEESensitive",pGeometry) ;
+    geometry_ = pGeometry.product() ;
+  }  
+  
+  // initialize showerPos and showerDir
+  showerPos_ = GlobalPoint(0.,0.,0.);
+  showerDir_ = GlobalVector(0.,0.,0.);
+  showerPosIsSet_ = false;
+  showerDirIsSet_ = false;
+  
+  // parameters
+  mip_ = 0.0000551;
+  minenergy_ = 4.;
+  rmax_ = 100.; // no transverse limitation for no PU case
+  if (withPileup_) rmax_ = 1.5*2.27;
+  hovereConesize_ = 0.05;
+    
+  // HGCAL average medium
+  criticalEnergy_ = 0.00536; // in GeV
+  radiationLength_ = 0.968; // in cm
+    
+  // longitudinal parameters
+  // mean values
+  // shower max <T> = t0 + t1*lny
+  // <alpha> = alpha0 + alpha1*lny
+  // shower average = alpha/beta  
+  meant0_ = -1.396;
+  meant1_ = 1.007;
+  meanalpha0_ = -0.0433;
+  meanalpha1_ = 0.540;
+  // sigmas
+  // sigma(lnT) = 1 /sigmalnt0 + sigmalnt1*lny; 
+  // sigma(lnalpha) = 1 /sigmalnt0 + sigmalnt1*lny; 
+  sigmalnt0_ = -2.506;
+  sigmalnt1_ = 1.245;
+  sigmalnalpha0_ = -0.08442;
+  sigmalnalpha1_ = 0.7904;
+  // corr(lnalpha,lnt) = corrlnalpha0_+corrlnalphalnt1_*y
+  corrlnalphalnt0_ = 0.7858;
+  corrlnalphalnt1_ = -0.0232;
+    
+  // cut values, to be moved as configurable parameters
+  cutStartPosition_ = 322.5;
+  cutSigmaetaeta_ = 0.0055;
+  if (withPileup_) cutSigmaetaeta_ = 0.00480;
+  cutHoverem_ = 0.003;
+  if (withPileup_) cutHoverem_ = 0.065;
+  cutLengthCompatibility_ = 4.0;
+  
+  std::cout << "*** HGCAL ShowerBased EmIdentification ***" << std::endl;
+  std::cout << "- max transverse radius: " << rmax_ << std::endl;
+  std::cout << "- hovere cone size: " << hovereConesize_ << std::endl;
+  std::cout << "- cut sigmaetaeta: " << cutSigmaetaeta_ << std::endl;
+  std::cout << "- cut hoverem: " << cutHoverem_ << std::endl;
+  std::cout << "- cut start position: " << cutStartPosition_ << std::endl;
+  std::cout << "- cut length compatibility (in sigmas): " << cutLengthCompatibility_ << std::endl;
+  
+}
+
+HGCALShowerBasedEmIdentification::~HGCALShowerBasedEmIdentification ()
+{
+//  delete pcaShowerAnalysis_;
+}
+
+void HGCALShowerBasedEmIdentification::setShowerPosition(const GlobalPoint &pos)
+{
+  showerPos_ = pos;
+  showerPosIsSet_ = true;
+}
+
+void HGCALShowerBasedEmIdentification::setShowerDirection(const GlobalVector &dir)
+{
+  showerDir_ = dir;
+  showerDirIsSet_ = true;
+}
+
+bool HGCALShowerBasedEmIdentification::isEm(const reco::CaloCluster* clu)
+{
+  return (cutStartPosition(clu) &&  cutSigmaetaeta(clu) && cutHadOverEm(clu));
+} 
+
+GlobalPoint HGCALShowerBasedEmIdentification::startPosition(const reco::CaloCluster* clu)
+{
+
+  GlobalPoint firstPos;
+  double zmin = 10000.; 
+  for (unsigned int ih=0;ih<clu->hitsAndFractions().size();++ih) {
+    const DetId & id_ = (clu->hitsAndFractions())[ih].first ;
+    HGCRecHitCollection::const_iterator theSeedHit = recHits_->find(id_);    
+    if (id_.det()==DetId::Forward) {
+      const HGCEEDetId & hgcid_ = HGCEEDetId((clu->hitsAndFractions())[ih].first) ;
+      GlobalPoint cellPos = geometry_->getPosition(hgcid_);
+      if (fabs(cellPos.z())<zmin) {
+	firstPos = cellPos;
+	zmin = fabs(cellPos.z());
+      }
+    }
+  }
+
+  // refine the first position estimation, taking the max energy in the first layer 
+  double maxfirstenergy=0.; 
+  for (unsigned int ih=0;ih<clu->hitsAndFractions().size();++ih) {
+    const DetId & id_ = (clu->hitsAndFractions())[ih].first ;
+    HGCRecHitCollection::const_iterator theHit = recHits_->find(id_);    
+    if (id_.det()==DetId::Forward) {
+      const HGCEEDetId & hgcid_ = HGCEEDetId((clu->hitsAndFractions())[ih].first) ;
+      GlobalPoint cellPos = geometry_->getPosition(hgcid_);
+      if (fabs(cellPos.z())!=zmin) continue;
+      if (theHit->energy()>maxfirstenergy) {
+	firstPos = cellPos;
+	maxfirstenergy = theHit->energy();
+      }
+    }
+  }
+    
+  // finally refine firstPos x and y using the meaured direction 
+  if (!showerPosIsSet_ || !showerPosIsSet_) return firstPos;
+ 
+  double lambda = (firstPos-showerPos_).z()/showerDir_.z();
+  GlobalPoint extraPos = showerPos_ + lambda*showerDir_;	 
+  firstPos = extraPos;
+  if (debug_) {
+   std::cout << "[HGCALShowerBasedEmIdentification::startPosition] showerPos " << showerPos_ << std::endl;
+   std::cout << "[HGCALShowerBasedEmIdentification::startPosition] showerDir " << showerDir_ << std::endl;
+   std::cout << "[HGCALShowerBasedEmIdentification::startPosition] firstPos " << firstPos << std::endl;
+  }
+ 
+  return firstPos;
+
+}
+
+double HGCALShowerBasedEmIdentification::sigmaetaeta(const reco::CaloCluster* clu)
+{
+
+  double sigmaetaeta=0., sumnrj=0.;
+  GlobalPoint firstPos = startPosition(clu);
+    
+  for (unsigned int ih=0;ih<clu->hitsAndFractions().size();++ih) {
+    const DetId & id_ = (clu->hitsAndFractions())[ih].first ;
+    HGCRecHitCollection::const_iterator theHit = recHits_->find(id_);    
+    if (id_.det()==DetId::Forward) {
+      const HGCEEDetId & hgcid_ = HGCEEDetId((clu->hitsAndFractions())[ih].first) ;
+      GlobalPoint cellPos = geometry_->getPosition(hgcid_);	     
+      GlobalVector radius, longitudinal, transverse;
+      radius = cellPos - firstPos;
+      // distances in local coordinates
+      longitudinal =  (radius.dot(showerDir_))*showerDir_.unit()/showerDir_.mag();
+      transverse = radius - longitudinal;
+      // apply energy cut cut
+      if (!withPileup_ || theHit->energy()>minenergy_*mip_) {
+	// simple transversal cut, later can refine as function of depth
+	if (!withPileup_ || transverse.mag() < rmax_) {
+	  sigmaetaeta += (cellPos.eta()-showerPos_.eta())*(cellPos.eta()-showerPos_.eta()) * theHit->energy();	     
+	  sumnrj += theHit->energy();
+	}
+      }
+    }
+  }
+
+  sigmaetaeta /= sumnrj;
+  sigmaetaeta = sqrt(sigmaetaeta);
+
+  // now correct the eta dependency
+  double feta; double feta_0; 
+  feta = 0.00964148 - 0.0107843*fabs(clu->eta()) + 0.00495703*fabs(clu->eta())*fabs(clu->eta());
+  feta_0 = 0.00964148 - 0.01078431*1.5 + 0.00495703*1.5*1.5;
+  sigmaetaeta *= feta_0 / feta ;
+
+  return sigmaetaeta;
+
+}
+
+double HGCALShowerBasedEmIdentification::sigmaetaeta(const reco::CaloCluster* clu, 
+ int ilayer, bool logweight)
+{
+
+  double sigmaetaeta=0., sumnrj=0., sumw=0.;
+  TPrincipal principal(2,"D"); 
+  GlobalPoint position, cellPos;
+  
+  double variables[2] = {0.,0.};
+
+  for (unsigned int ih=0;ih<clu->hitsAndFractions().size();++ih) {
+    const DetId & id_ = (clu->hitsAndFractions())[ih].first ;
+    HGCRecHitCollection::const_iterator theHit = recHits_->find(id_);    
+    if (id_.det()==DetId::Forward && id_.subdetId()==HGCEE && HGCEEDetId(id_).layer()==ilayer) {
+      cellPos = geometry_->getPosition(HGCEEDetId(id_));
+      variables[0] = cellPos.x(); variables[1] = cellPos.y(); 
+      sumnrj += theHit->energy();
+      //// energy weighting
+      //for (int i=0; i<int(theHit->energy()/mip_); i++) principal_->AddRow(variables); 
+      //} else {
+      // a log-weighting, energy not in fraction of total
+      double w0 = -log(20.); // threshold, could use here JB's thresholds
+      double scale = 250.; // to scale the weight so to get ~same nbr of points as for E-weight 
+	                   //  for the highest hit of ~0.1 GeV
+      int nhit = int(scale*(w0+log(theHit->energy()/mip_)));
+      if (nhit<0) nhit=1;
+      for (int i=0; i<nhit; i++) principal.AddRow(variables);	
+      //}	     
+    }
+  }
+    
+  //std::cout << "[HGCALShowerBasedEmIdentification::sigmaetaeta], layer " << ilayer
+  //<< " sumnrj " << sumnrj << std::endl;
+
+  principal.MakePrincipals();  
+  position = GlobalPoint((*principal.GetMeanValues())[0],(*principal.GetMeanValues())[1],cellPos.z());	 
+
+  for (unsigned int ih=0;ih<clu->hitsAndFractions().size();++ih) {
+    const DetId & id_ = (clu->hitsAndFractions())[ih].first ;
+    HGCRecHitCollection::const_iterator theHit = recHits_->find(id_);    
+    if (id_.det()==DetId::Forward && id_.subdetId()==HGCEE && HGCEEDetId(id_).layer()==ilayer) {
+      GlobalPoint cellPos = geometry_->getPosition(HGCEEDetId(id_));	     
+      double weight = theHit->energy();
+      if (logweight) {
+        double w0 = 2.; 
+        weight = std::max(0.,w0 + log(theHit->energy()/sumnrj));
+      }	
+      sigmaetaeta += (cellPos.eta()-position.eta())*(cellPos.eta()-position.eta()) * weight;
+      sumw += weight;
+    }
+  }
+
+  //std::cout << "[HGCALShowerBasedEmIdentification::sigmaetaeta], layer " << ilayer
+  //<< " position " << position << " sigmaeta " << sigmaetaeta << std::endl;
+
+  if (sumw==0.) return 0.;
+
+  sigmaetaeta /= sumw;
+  sigmaetaeta = sqrt(sigmaetaeta);
+  //std::cout << "[HGCALShowerBasedEmIdentification::sigmaetaeta], layer " << ilayer
+  //<< " position " << position << " sigmaeta " << sigmaetaeta << std::endl;
+   
+  // now correct the eta dependency
+  double feta=1.; double feta_0=1.; 
+  // NoPU corrections
+  if (ilayer==1) {
+    feta = 0.0101201 - 0.0102206*fabs(clu->eta()) + 0.00362097*fabs(clu->eta())*fabs(clu->eta());
+    feta_0 = 0.0101201 - 0.0102206*1.5 + 0.00362097*1.5*1.5;
+  } else if (ilayer==2) {
+    feta = 0.00766728 - 0.00791464*fabs(clu->eta()) + 0.00303245*fabs(clu->eta())*fabs(clu->eta());
+    feta_0 = 0.00766728 - 0.00791464*1.5 + 0.00303245*1.5*1.5;
+  } else if (ilayer==3) {
+    feta = 0.00634266 - 0.00656176*fabs(clu->eta()) + 0.00261383*fabs(clu->eta())*fabs(clu->eta());
+    feta_0 = 0.00634266 - 0.00656176*1.5 + 0.00261383*1.5*1.5;
+  } else if (ilayer==4) {
+    feta = 0.0078056 - 0.00834319*fabs(clu->eta()) + 0.00335996*fabs(clu->eta())*fabs(clu->eta());
+    feta_0 = 0.0078056 - 0.00834319*1.5 + 0.00335996*1.5*1.5;
+  } else if (ilayer==5) {
+    feta = 0.00749733 - 0.007857*fabs(clu->eta()) + 0.00311549*fabs(clu->eta())*fabs(clu->eta());
+    feta_0 = 0.00749733 - 0.007857*1.5 + 0.00311549*1.5*1.5;
+  } else if (ilayer==6) {
+    feta =  0.00913178 - 0.00956428*fabs(clu->eta()) + 0.00381994*fabs(clu->eta())*fabs(clu->eta());
+    feta_0 =  0.00913178 - 0.00956428*1.5 + 0.00381994*1.5*1.5;
+  } else if (ilayer==7) {
+    feta =  0.00699386 - 0.0074963*fabs(clu->eta()) + 0.0032499*fabs(clu->eta())*fabs(clu->eta());
+    feta_0 =  0.00699386 - 0.0074963*1.5 + 0.0032499*1.5*1.5;
+  } else if (ilayer==8) {
+    feta =  0.00816775 - 0.00871664*fabs(clu->eta()) + 0.00382981*fabs(clu->eta())*fabs(clu->eta());
+    feta_0 =  0.00816775 - 0.00871664*1.5 + 0.00382981*1.5*1.5;
+  } else if (ilayer==9) {
+    feta =  0.00617746 - 0.00665314*fabs(clu->eta()) + 0.00323033*fabs(clu->eta())*fabs(clu->eta());
+    feta_0 =  0.00617746 - 0.00665314*1.5 + 0.00323033*1.5*1.5;
+  } else if (ilayer==10) {
+    feta =  0.00872935 - 0.00928504*fabs(clu->eta()) + 0.00416514*fabs(clu->eta())*fabs(clu->eta());
+    feta_0 =  0.00872935 - 0.00928504*1.5 + 0.00416514*1.5*1.5;
+  } else if (ilayer==11) {
+    feta =  0.00766227 - 0.00822116*fabs(clu->eta()) + 0.00383486*fabs(clu->eta())*fabs(clu->eta());
+    feta_0 =  0.00766227 - 0.00822116*1.5 + 0.00383486*1.5*1.5;
+  } else if (ilayer==12) {
+    feta =  0.0088128 - 0.00946105 *fabs(clu->eta()) + 0.00437748*fabs(clu->eta())*fabs(clu->eta());
+    feta_0 =  0.0088128 -0.00946105 *1.5 + 0.00437748*1.5*1.5;
+  } else if (ilayer==13) {
+    feta =  0.00759962 - 0.00827032 *fabs(clu->eta()) + 0.00403462*fabs(clu->eta())*fabs(clu->eta());
+    feta_0 =  0.00759962 - 0.00827032 *1.5 + 0.00403462*1.5*1.5;
+  } else if (ilayer==14) {
+    feta = 0.00975987 - 0.0103078 *fabs(clu->eta()) + 0.00477958*fabs(clu->eta())*fabs(clu->eta());
+    feta_0 =  0.00975987 - 0.0103078 *1.5 + 0.00477958*1.5*1.5;
+  } else if (ilayer==15) {
+    feta  = 0.00805003 - 0.00864848 *fabs(clu->eta()) + 0.00437212*fabs(clu->eta())*fabs(clu->eta());
+    feta_0 = 0.00805003 - 0.00864848 *1.5 + 0.00437212*1.5*1.5;
+  } else if (ilayer==16) {
+    feta  = 0.0114562 - 0.0121809 *fabs(clu->eta()) + 0.00553499*fabs(clu->eta())*fabs(clu->eta());
+    feta_0 = 0.0114562 - 0.0121809 *1.5 + 0.00553499*1.5*1.5;
+  } else if (ilayer==17) {
+    feta  = 0.00902615 - 0.00966597 *fabs(clu->eta()) + 0.00486833*fabs(clu->eta())*fabs(clu->eta());
+    feta_0 = 0.00902615 - 0.00966597 *1.5 + 0.00486833*1.5*1.5;
+  } else if (ilayer==18) {
+    feta  = 0.0132086 - 0.0140273 *fabs(clu->eta()) + 0.00627827*fabs(clu->eta())*fabs(clu->eta());
+    feta_0 = 0.0132086 - 0.0140273 *1.5 + 0.00627827*1.5*1.5;
+  } else if (ilayer==19) {
+    feta  = 0.00839401 - 0.00930494 *fabs(clu->eta()) + 0.00511968*fabs(clu->eta())*fabs(clu->eta());
+    feta_0 = 0.00839401 - 0.00930494 *1.5 + 0.00511968*1.5*1.5;
+  } else if (ilayer==20) {
+    feta  = 0.009421 - 0.0103944 *fabs(clu->eta()) + 0.00568878*fabs(clu->eta())*fabs(clu->eta());
+    feta_0 = 0.009421 - 0.0103944 *1.5 + 0.00568878*1.5*1.5;
+  } else if (ilayer==21) {
+    feta  = 0.00607798 - 0.0081057 *fabs(clu->eta()) + 0.00530424*fabs(clu->eta())*fabs(clu->eta());
+    feta_0 = 0.00607798 - 0.0081057 *1.5 + 0.00530424*1.5*1.5;
+  } else if (ilayer==22) {
+    feta  = 0.00243842 - 0.0048886 *fabs(clu->eta()) + 0.00482695*fabs(clu->eta())*fabs(clu->eta());
+    feta_0 = 0.00243842 - 0.0048886 *1.5 + 0.00482695*1.5*1.5;
+  } else if (ilayer==23) {
+    feta  = 0.00233566 - 0.00745343 *fabs(clu->eta()) + 0.00604013*fabs(clu->eta())*fabs(clu->eta());
+    feta_0 = 0.00233566 - 0.00745343 *1.5 + 0.00604013*1.5*1.5;
+  } else if (ilayer==24) {
+    feta  = 0.00233566 - 0.00745343 *fabs(clu->eta()) + 0.00604013*fabs(clu->eta())*fabs(clu->eta());
+    feta_0 = 0.00233566 - 0.00745343 *1.5 + 0.00604013*1.5*1.5;
+  } else if (ilayer==25) {
+    feta  = 0.0124781 - 0.0180787 *fabs(clu->eta()) + 0.00848182*fabs(clu->eta())*fabs(clu->eta());
+    feta_0 = 0.0124781 - 0.0180787 *1.5 + 0.00848182*1.5*1.5;
+  } else if (ilayer==26) {
+    feta  = 0.0178317 - 0.0247529 *fabs(clu->eta()) + 0.010354*fabs(clu->eta())*fabs(clu->eta());
+    feta_0 = 0.0178317 - 0.0247529 *1.5 + 0.010354*1.5*1.5;
+  } else if (ilayer==27) {
+    feta  = 0.0236844 - 0.0301237 *fabs(clu->eta()) + 0.0111237*fabs(clu->eta())*fabs(clu->eta());
+    feta_0 = 0.0236844 - 0.0301237 *1.5 + 0.0111237*1.5*1.5;
+  } else if (ilayer==28) {
+    feta  = 0.0114311 - 0.0179117 *fabs(clu->eta()) + 0.00802573*fabs(clu->eta())*fabs(clu->eta());
+    feta_0 = 0.0114311 - 0.0179117 *1.5 + 0.00802573*1.5*1.5;
+  } else if (ilayer==29) {
+    feta  = 0.0158825 - 0.0203313 *fabs(clu->eta()) + 0.00774348*fabs(clu->eta())*fabs(clu->eta());
+    feta_0 = 0.0158825 - 0.0203313 *1.5 + 0.00774348*1.5*1.5;
+  } else if (ilayer==30) {
+    feta  = 0.0232539 - 0.0272789 *fabs(clu->eta()) + 0.00920109*fabs(clu->eta())*fabs(clu->eta());
+    feta_0 = 0.0232539 - 0.0272789 *1.5 + 0.00920109*1.5*1.5;
+  }
+
+  sigmaetaeta *= feta_0 / feta ;
+
+  return sigmaetaeta;
+
+}
+
+double HGCALShowerBasedEmIdentification::hadOverEm(const reco::CaloCluster* clu)
+{
+
+  double hoverem=0.;
+  
+  // check that showerPos and showerDir have been set
+  if (!showerPosIsSet_) {
+   std::cout << "[HGCALShowerBasedEmIdentification::hadOverEm] error, showwer position not set " << std::endl;
+   std::cout << "[HGCALShowerBasedEmIdentification::hadOverEm] error, please invoke setShowerPos and setShowerDir before invoking this function " << std::endl;
+   return 0.;
+  }
+
+  // H/E selection
+  math::XYZVector vectorSC(showerPos_.x(),showerPos_.y(),showerPos_.z());
+  std::vector<reco::PFCluster>::const_iterator trItr = hcalClusters_->begin();
+  std::vector<reco::PFCluster>::const_iterator trItrEnd = hcalClusters_->end();
+  for( ;  trItr != trItrEnd ; ++trItr){
+    math::XYZVector vectorHgcalHFECluster(trItr->position().x(),trItr->position().y(),trItr->position().z());
+    double dR = ROOT::Math::VectorUtil::DeltaR(vectorSC,vectorHgcalHFECluster);
+    //use all layers
+    if (dR<hovereConesize_) hoverem += trItr->energy();
+  }  
+  
+  // here use the cluster, have to see if the cut can stay or if the preID has to apply on SC rather
+  //hoverem /= scle;
+  hoverem /= clu->energy();
+
+  return hoverem;
+  
+}
+
+double HGCALShowerBasedEmIdentification::lengthCompatibility(const reco::CaloCluster* clu)
+{
+
+  // check that showerPos and showerDir have been set
+  if (!showerPosIsSet_) {
+   std::cout << "[HGCALShowerBasedEmIdentification::lengthCompatibility] error, showwer position not set " << std::endl;
+   std::cout << "[HGCALShowerBasedEmIdentification::lengthCompatibility] error, please invoke setShowerPos and setShowerDir before invoking this function " << std::endl;
+   return 0.;
+  }
+
+  double lengthCompatibility=0., predictedLength=0., predictedSigma=0.;
+	
+  // shower length	 
+  double length =  (showerPos_ - startPosition(clu)).mag();
+  double lny = clu->energy()/criticalEnergy_>1. ? std::log(clu->energy()/criticalEnergy_) : 0.;
+
+  // inject here parametrization results
+  double meantmax = meant0_ + meant1_*lny;
+  double meanalpha = meanalpha0_ + meanalpha1_*lny;
+  double sigmalntmax = 1. / (sigmalnt0_+sigmalnt1_*lny);
+  double sigmalnalpha = 1. / (sigmalnalpha0_+sigmalnalpha1_*lny);
+  double corrlnalphalntmax = corrlnalphalnt0_+corrlnalphalnt1_*lny;
+  
+  double invbeta = meantmax/(meanalpha-1.);
+  predictedLength = meanalpha*invbeta;
+  predictedLength *= radiationLength_;
+  
+  double sigmaalpha = meanalpha*sigmalnalpha;
+  if (sigmaalpha<0.) sigmaalpha = 1.;
+  double sigmatmax = meantmax*sigmalntmax;
+  if (sigmatmax<0.) sigmatmax = 1.;
+  
+  predictedSigma = sigmalnalpha*sigmalnalpha/((meanalpha-1.)*(meanalpha-1.));
+  if (debug_) std::cout << "[HGCALShowerBasedEmIdentification::lengthCompatibility] sigma/m squared 1st term " << predictedSigma << std::endl;
+  predictedSigma += sigmalntmax*sigmalntmax;
+  if (debug_) std::cout << "[HGCALShowerBasedEmIdentification::lengthCompatibility] sigma/m squared with 2nd term " << predictedSigma << std::endl;
+  predictedSigma -= 2*sigmalnalpha*sigmalntmax*corrlnalphalntmax/(meanalpha-1.);
+  if (debug_) std::cout << "[HGCALShowerBasedEmIdentification::lengthCompatibility] sigma/m squared with correlation " << predictedSigma << std::endl;
+  predictedSigma = predictedLength*sqrt(predictedSigma);
+  
+  lengthCompatibility = (predictedLength-length)/predictedSigma;
+  
+  if (debug_) std::cout << "[HGCALShowerBasedEmIdentification::lengthCompatibility] predictedLength-length " << predictedLength-length << std::endl;
+  if (debug_) std::cout << "[HGCALShowerBasedEmIdentification::lengthCompatibility] sigmalntmax " << sigmalntmax << std::endl;
+  if (debug_) std::cout << "[HGCALShowerBasedEmIdentification::lengthCompatibility] sigmalnalpha " << sigmalnalpha << std::endl;
+  if (debug_) std::cout << "[HGCALShowerBasedEmIdentification::lengthCompatibility] predictedSigma " << predictedSigma << std::endl;
+  if (debug_) std::cout << "[HGCALShowerBasedEmIdentification::lengthCompatibility] lengthCompatibility " << lengthCompatibility << std::endl;
+  
+//  // ancien calcul  
+//  double sigma = predictedLength / (-2.506+1.245*lny);
+//  double oldlengthCompatibility = fabs(predictedLength-length)*radiationLength_/sigma;
+//  std::cout << "[HGCALShowerBasedEmIdentification::lengthCompatibility] previous lengthCompatibility " << oldlengthCompatibility << std::endl;
+ 
+  return lengthCompatibility;
+  
+}
+
+bool HGCALShowerBasedEmIdentification::cutSigmaetaeta(const reco::CaloCluster* clu)
+{
+  return (sigmaetaeta(clu)<cutSigmaetaeta_);
+}
+
+bool HGCALShowerBasedEmIdentification::cutStartPosition(const reco::CaloCluster* clu)
+{
+  return (std::abs(startPosition(clu).z())<cutStartPosition_);
+}
+
+bool HGCALShowerBasedEmIdentification::cutHadOverEm(const reco::CaloCluster* clu)
+{
+  return (hadOverEm(clu)<cutHoverem_); 
+}
+
+bool HGCALShowerBasedEmIdentification::cutLengthCompatibility(const reco::CaloCluster* clu)
+{
+  return (std::abs(lengthCompatibility(clu))<cutLengthCompatibility_); 
+}
+
