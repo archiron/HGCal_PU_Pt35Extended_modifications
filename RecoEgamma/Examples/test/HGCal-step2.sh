@@ -13,6 +13,11 @@ cd $LOG_SOURCE
 eval `scramv1 runtime -sh`
 cd -
 echo "valeur : $1"
-cmsRun /afs/cern.ch/work/a/archiron/private/CMSSW_6_2_0_SLHC25_integration/src/RecoEgamma/Examples/test/ElectronsPt35-2023HGCALUpg_SLHC25_step2_cfg.py $1
+voms-proxy-init --voms cms
+voms-proxy-info --all
+env
+pwd
+#cmsRun /afs/cern.ch/work/a/archiron/private/CMSSW_6_2_0_SLHC25_integration/src/RecoEgamma/Examples/test/ElectronsPt35-2023HGCALUpg_SLHC25_step2_cfg.py $1
+cmsRun /afs/cern.ch/work/a/archiron/private/CMSSW_6_2_0_SLHC25_integration/src/RecoEgamma/Examples/test/Claude_step2_cfg.py $1
 
 

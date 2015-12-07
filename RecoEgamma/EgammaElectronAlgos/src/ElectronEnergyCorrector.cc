@@ -36,16 +36,17 @@ void ElectronEnergyCorrector::update(const edm::EventSetup& setup)
   fixedMatrix_->update(setup); 
  }
 
-//CC@@ temporary, waiting for the axis to be stored in the CaloCluster
+// this function is only needed temporarily waiting for the axis to be stored in 
+// the CaloCluster
 void ElectronEnergyCorrector::setEvent(edm::Event* event) 
  {
   edm::Handle<reco::PFClusterCollection> pfclustersHandle;
   event->getByLabel( "particleFlowClusterHGCEE", pfclustersHandle );  
   clusters_ = pfclustersHandle.product() ;
  }
-//CC@@
 
-//CC@@ temporary, waiting for the axis to be stored in the CaloCluster
+// this function is only needed temporarily waiting for the axis to be stored in 
+// the CaloCluster
 const reco::PFCluster* ElectronEnergyCorrector::getPFCluster(const reco::CaloCluster *cl) const {
 
   // find the PFCluster corresponding to the given CaloCluster
@@ -62,7 +63,6 @@ const reco::PFCluster* ElectronEnergyCorrector::getPFCluster(const reco::CaloClu
   return res;
 
 }
-//CC@@
 
 void ElectronEnergyCorrector::classBasedParameterizationUncertainty( reco::GsfElectron & electron )
  {
@@ -117,7 +117,7 @@ void ElectronEnergyCorrector::hgcalSuperClusterCleanedEnergy (reco::GsfElectron 
   // this is actualy checking we are not in EB
   // as the call to this function is conditionned in classbasedParametrisationEnergy to
   // being in HGCAL, probably this check can be removed here
-  // or at least it should check that we are in HGCAL 
+  // or at list it should check that we are in HGCAL 
   int det = electron.superCluster()->seed()->hitsAndFractions()[0].first.subdetId() ;
   if (det==EcalBarrel) {    
     throw cms::Exception("ElectronEnergyCorrector::hgcalSuperClusterCleanedEnergy")
@@ -138,10 +138,10 @@ void ElectronEnergyCorrector::hgcalSuperClusterCleanedEnergy (reco::GsfElectron 
   
   for (reco::CaloCluster_iterator itcl=electron.superCluster()->clustersBegin(); itcl!=electron.superCluster()->clustersEnd(); itcl++) {
 
-//CC@@ temporary, waiting for the axis to be stored in the CaloCluster
+    //const reco::PFCluster *cl = dynamic_cast<const reco::PFCluster*>(&(**itcl));
     const reco::PFCluster *cl = getPFCluster(&(**itcl));
     if (cl==0) continue;
-//CC@@   
+    
     // change the matrix size if the considered cluster is the seed
     if ((*itcl)->energy() == electron.superCluster()->seed()->energy()) matrix_size = matrix_size_seed;
  

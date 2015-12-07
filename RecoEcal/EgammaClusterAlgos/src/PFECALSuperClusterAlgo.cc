@@ -165,6 +165,7 @@ namespace {
 				x->eta(),
 				x->phi()            );
         // HGCAL case: add tighter cuts for mustache region
+	// might be simpler to use the box rather
         if (det!=HGCEE) return ( pass );
 	if ((x->energy_nocalib()/std::cosh(x->eta()))<0.25) hgcalOK=false; //cut should be made configurable
 	if (std::abs(the_seed->eta()-x->eta())>0.015) hgcalOK=false; //cut should be made configurable

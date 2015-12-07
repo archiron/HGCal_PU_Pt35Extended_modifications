@@ -9,6 +9,7 @@ cd -
 for (( i=10; i<20; i++ ))
 do
    bsub -q 1nd HGCal-step2.sh $i
+#   ./HGCal-step2.sh $i
 done
 
 
